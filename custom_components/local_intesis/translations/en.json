@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Intesis Gateway",
+        "description": "Enter the IP address and credentials for your IntesisHome gateway.\n\nDefault credentials are `{default_user}` / `{default_pass}`.",
+        "data": {
+          "host": "IP Address",
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the gateway. Check the IP address.",
+      "auth": "Invalid username or password. Default is admin/admin."
+    },
+    "abort": {
+      "already_configured": "This gateway is already configured."
+    }
+  }
+}
