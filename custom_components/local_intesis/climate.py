@@ -7,6 +7,9 @@ from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
     HVACMode,
+    PRESET_BOOST,
+    PRESET_COMFORT,
+    PRESET_ECO,
 )
 from homeassistant.const import (
     ATTR_TEMPERATURE,
@@ -19,16 +22,25 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from . import IntesisGateway
 from .const import (
     DOMAIN,
+    ERROR_MAP,
     HVAC_MODE_MAP,
     HVAC_MODE_REVERSE,
     MODE_MAP,
     MODE_REVERSE,
+    PRESET_MODE_MAP,
+    PRESET_MODE_REVERSE,
     SCAN_INTERVAL,
+    UID_ALARM_STATUS,
+    UID_AQUAREA_COOL_CONSUMPTION,
+    UID_AQUAREA_HEAT_CONSUMPTION,
+    UID_CLIMATE_WORKING_MODE,
+    UID_ERROR_CODE,
     UID_FAN_SPEED,
     UID_HVANE,
     UID_MODE,
     UID_OUTDOOR_TEMP,
     UID_POWER,
+    UID_RSSI,
     UID_SETPOINT,
     UID_SETPOINT_MAX,
     UID_SETPOINT_MIN,
@@ -106,6 +118,9 @@ class LocalIntesisClimate(ClimateEntity):
             self._attr_supported_features |= ClimateEntityFeature.FAN_MODE
         if gateway.supports_vvane() or gateway.supports_hvane():
             self._attr_supported_features |= ClimateEntityFeature.SWING_MODE
+        if gateway.has_climate_working_mode:
+            self._attr_supported_features |= ClimateEntityFeature.PRESET_MODE
+            self._attr_preset_modes = gateway.preset_modes
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(self.coordinator.async_add_listener(self._handle_coordinator_update))
@@ -210,11 +225,51 @@ class LocalIntesisClimate(ClimateEntity):
         return modes
 
     @property
+    def preset_mode(self) -> str | None:
+        val = self._value(UID_CLIMATE_WORKING_MODE)
+        if val is not None:
+            return self._gateway.get_preset_label(val)
+        return None
+
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        val = self._gateway.get_preset_value(preset_mode)
+        if val is not None:
+            await self._gateway.set_value(UID_CLIMATE_WORKING_MODE, val)
+            self._optimistic_set(UID_CLIMATE_WORKING_MODE, val)
+        self.async_write_ha_state()
+        await self._schedule_sync()
+
+    @property
     def extra_state_attributes(self) -> dict:
         attrs = {}
         ot = self._value(UID_OUTDOOR_TEMP)
         if ot is not None:
             attrs["outdoor_temperature"] = ot / 10
+
+        alarm = self._value(UID_ALARM_STATUS)
+        if alarm is not None:
+            attrs["alarm_status"] = alarm
+
+        err = self._value(UID_ERROR_CODE)
+        if err is not None:
+            err_entry = ERROR_MAP.get(err)
+            if err_entry:
+                attrs["error_code"] = f"{err_entry['code']}: {err_entry['desc']}"
+            else:
+                attrs["error_code"] = str(err)
+
+        rssi = self._value(UID_RSSI)
+        if rssi is not None:
+            attrs["rssi"] = rssi
+
+        cool_power = self._value(UID_AQUAREA_COOL_CONSUMPTION)
+        if cool_power is not None:
+            attrs["power_consumption_cool_kw"] = round(cool_power / 1000, 1)
+
+        heat_power = self._value(UID_AQUAREA_HEAT_CONSUMPTION)
+        if heat_power is not None:
+            attrs["power_consumption_heat_kw"] = round(heat_power / 1000, 1)
+
         return attrs
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
@@ -230,6 +285,11 @@ class LocalIntesisClimate(ClimateEntity):
                     await self._gateway.set_value(UID_MODE, uid)
                     self._optimistic_set(UID_POWER, 1)
                     self._optimistic_set(UID_MODE, uid)
+                    # Re-send setpoint - some devices reset it on mode change
+                    target = self.target_temperature
+                    if target is not None:
+                        await self._gateway.set_value(UID_SETPOINT, int(target * 10))
+                        self._optimistic_set(UID_SETPOINT, int(target * 10))
         self.async_write_ha_state()
         await self._schedule_sync()
 

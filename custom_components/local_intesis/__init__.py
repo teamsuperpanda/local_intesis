@@ -17,12 +17,21 @@ from .const import (
     API_LOGIN,
     API_SET_VALUE,
     DOMAIN,
+    FAN_SPEED_TABLES,
+    PRESET_MODE_MAP,
+    PRESET_MODE_REVERSE,
+    UID_ALARM_STATUS,
+    UID_AQUAREA_COOL_CONSUMPTION,
+    UID_AQUAREA_HEAT_CONSUMPTION,
+    UID_CLIMATE_WORKING_MODE,
     UID_CONFIG_FAN_MAP,
     UID_CONFIG_HVANE,
     UID_CONFIG_VVANE,
+    UID_ERROR_CODE,
     UID_FAN_SPEED,
-    UID_VVANE,
     UID_HVANE,
+    UID_RSSI,
+    UID_VVANE,
 )
 
 PLATFORMS = ["climate"]
@@ -43,6 +52,12 @@ class IntesisGateway:
         self._config_fan_map: dict[int, str] = {}
         self._config_vvane_list: list[int] = []
         self._config_hvane_list: list[int] = []
+        self._has_climate_working_mode = False
+        self._has_alarm_status = False
+        self._has_error_code = False
+        self._has_rssi = False
+        self._has_aquarea_cool = False
+        self._has_aquarea_heat = False
 
     async def _request(self, command: str, _retry: bool = True, **kwargs) -> dict | None:
         if not self._session_id:
@@ -103,17 +118,14 @@ class IntesisGateway:
         return True
 
     def _parse_config_datapoints(self) -> None:
-        uid_67 = self._datapoints.get(UID_CONFIG_FAN_MAP)
-        if uid_67 and "descr" in uid_67:
-            states = uid_67["descr"].get("states", [0, 1, 2, 3])
-            labels = ["auto", "low", "medium", "high", "max"]
-            self._config_fan_map = {s: labels[i] if i < len(labels) else f"speed_{s}" for i, s in enumerate(states)}
-        else:
-            dp = self._datapoints.get(UID_FAN_SPEED)
-            if dp:
-                states = dp.get("descr", {}).get("states", [0, 1, 2, 3])
-                labels = ["auto", "low", "medium", "high", "max"]
-                self._config_fan_map = {s: labels[i] if i < len(labels) else f"speed_{s}" for i, s in enumerate(states)}
+        self._has_climate_working_mode = UID_CLIMATE_WORKING_MODE in self._datapoints
+        self._has_alarm_status = UID_ALARM_STATUS in self._datapoints
+        self._has_error_code = UID_ERROR_CODE in self._datapoints or 144 in self._datapoints
+        self._has_rssi = UID_RSSI in self._datapoints
+        self._has_aquarea_cool = UID_AQUAREA_COOL_CONSUMPTION in self._datapoints
+        self._has_aquarea_heat = UID_AQUAREA_HEAT_CONSUMPTION in self._datapoints
+
+        self._config_fan_map = self._get_fan_map()
 
         vvane_cfg = self._datapoints.get(UID_CONFIG_VVANE)
         vvane_dp = self._datapoints.get(UID_VVANE)
@@ -134,6 +146,20 @@ class IntesisGateway:
                 self._config_hvane_list = states
         if not self._config_hvane_list and hvane_cfg and "descr" in hvane_cfg:
             self._config_hvane_list = hvane_cfg["descr"].get("states", [])
+
+    def _get_fan_map(self) -> dict[int, str]:
+        if UID_FAN_SPEED not in self._datapoints:
+            return {}
+        fan_values = sorted(self._datapoints[UID_FAN_SPEED]["descr"]["states"])
+        device_model = self._devices.get(self.device_id, {}).get("model", "")
+        if 0 not in fan_values and "MH-AC-WIFI" in device_model:
+            fan_values = [0] + fan_values
+        for table_key in sorted(FAN_SPEED_TABLES.keys(), reverse=True):
+            table = FAN_SPEED_TABLES[table_key]
+            if sorted(table.keys()) == fan_values:
+                return table
+        labels = ["auto", "low", "medium", "high", "max"]
+        return {s: labels[i] if i < len(labels) else f"speed_{s}" for i, s in enumerate(fan_values)}
 
     async def poll_values(self) -> dict[int, int]:
         result = await self._request(API_GET_VALUE, uid="all")
@@ -197,6 +223,43 @@ class IntesisGateway:
 
     def has_datapoint(self, uid: int) -> bool:
         return uid in self._datapoints
+
+    @property
+    def has_climate_working_mode(self) -> bool:
+        return self._has_climate_working_mode
+
+    @property
+    def has_alarm_status(self) -> bool:
+        return self._has_alarm_status
+
+    @property
+    def has_error_code(self) -> bool:
+        return self._has_error_code
+
+    @property
+    def has_rssi(self) -> bool:
+        return self._has_rssi
+
+    @property
+    def has_aquarea_cool(self) -> bool:
+        return self._has_aquarea_cool
+
+    @property
+    def has_aquarea_heat(self) -> bool:
+        return self._has_aquarea_heat
+
+    @property
+    def preset_modes(self) -> list[str]:
+        return list(PRESET_MODE_MAP.values()) if self._has_climate_working_mode else []
+
+    def get_preset_value(self, label: str) -> int | None:
+        for k, v in PRESET_MODE_MAP.items():
+            if v == label:
+                return k
+        return None
+
+    def get_preset_label(self, value: int) -> str | None:
+        return PRESET_MODE_MAP.get(value)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
