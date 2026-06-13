@@ -1,0 +1,13 @@
+{
+  "domain": "local_intesis",
+  "name": "LocalIntesis",
+  "codeowners": ["@teamsuperpanda"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/teamsuperpanda/local_intesis",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/teamsuperpanda/local_intesis/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}
