@@ -21,11 +21,9 @@ UID_TEMPERATURE = 10
 UID_SETPOINT_MIN = 35
 UID_SETPOINT_MAX = 36
 UID_OUTDOOR_TEMP = 37
-UID_CONFIG_FAN_MAP = 67
 UID_CONFIG_VVANE = 63
 UID_CONFIG_HVANE = 64
 UID_CLIMATE_WORKING_MODE = 42
-UID_OPERATING_MODE = 58
 UID_AQUAREA_COOL_CONSUMPTION = 81
 UID_AQUAREA_HEAT_CONSUMPTION = 82
 UID_ALARM_STATUS = 14
@@ -70,8 +68,6 @@ PRESET_MODE_MAP = {
     1: "eco",
     2: "powerful",
 }
-PRESET_MODE_REVERSE = {v: k for k, v in PRESET_MODE_MAP.items()}
-
 ERROR_MAP = {
     0: {"code": "H00", "desc": "No abnormality detected"},
     2: {"code": "H91", "desc": "Tank booster heater OLP abnormality"},
@@ -116,12 +112,5 @@ ERROR_MAP = {
     238: {"code": "F49", "desc": "Outdoor bypass outlet temperature sensor abnormality"},
     65535: {"code": "N/A", "desc": "Communication error between PA-IntesisHome"},
 }
-
-SUPPORTED_LOCAL_MODELS = [
-    "FJ-RC-WIFI-1B",
-    "FJ-AC-WIFI-1B",
-    "DK-RC-WIFI-1B",
-    "MH-AC-WIFI-1",
-]
 
 SCAN_INTERVAL = timedelta(seconds=6)

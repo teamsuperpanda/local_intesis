@@ -28,7 +28,6 @@ from .const import (
     MODE_MAP,
     MODE_REVERSE,
     PRESET_MODE_MAP,
-    PRESET_MODE_REVERSE,
     SCAN_INTERVAL,
     UID_ALARM_STATUS,
     UID_AQUAREA_COOL_CONSUMPTION,
@@ -142,11 +141,13 @@ class LocalIntesisClimate(ClimateEntity):
 
     async def _schedule_sync(self, delay: float = 1.5) -> None:
         async def _do_sync():
-            await asyncio.sleep(delay)
-            await self.coordinator.async_refresh()
-            self._local_values.clear()
+            try:
+                await asyncio.sleep(delay)
+                await self.coordinator.async_refresh()
+            finally:
+                self._local_values.clear()
 
-        asyncio.ensure_future(_do_sync())
+        asyncio.create_task(_do_sync())
 
     @property
     def current_temperature(self) -> float | None:
